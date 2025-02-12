@@ -19,3 +19,4 @@
 *.lib
 *.exp
 *.dll
+/.vs

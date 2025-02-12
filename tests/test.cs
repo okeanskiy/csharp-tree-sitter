@@ -14,44 +14,27 @@ namespace TreeSitterTest
         [DllImport("tree-sitter-cpp.dll", CallingConvention = CallingConvention.Cdecl)]
         private static extern IntPtr tree_sitter_cpp();
 
-        public static void PostOrderTraverse(string path, String filetext, TSCursor cursor)
+        public static void PostOrderCursorRecursive(TSCursor cursor, string fileText)
         {
-            var rootCursor = cursor;
-
-            for (;;) {
-                int so = (int)cursor.current_node().start_offset();
-                int eo = (int)cursor.current_node().end_offset();
-                int sl = (int)cursor.current_node().start_point().row + 1;
-                var field = cursor.current_field();
-                var type = cursor.current_symbol();
-                bool hasChildren = cursor.goto_first_child();
-
-                var span = filetext.AsSpan(so, eo - so);
-
-                if (hasChildren) {
-                    continue;
-                }
-
-                Console.Error.WriteLine("The node type is {0}, symbol is {1}", type, span.ToString());
-
-                if (cursor.goto_next_sibling()) {
-                    continue;
-                }
-
+            // If we can go down to the first child, let's iterate that child list
+            if (cursor.goto_first_child()) {
                 do {
-                    cursor.goto_parent();
-                    int so_p = (int)cursor.current_node().start_offset();
-                    int eo_p = (int)cursor.current_node().end_offset();
-                    var type_p = cursor.current_symbol();
-                    var span_p = filetext.AsSpan(so_p, eo_p - so_p);
+                    using var childCopy = cursor.copy();
+                    PostOrderCursorRecursive(childCopy, fileText);
+                } while (cursor.goto_next_sibling());
+                
+                // Once done with children, go back up
+                cursor.goto_parent();
+            }
 
-                    Console.Error.WriteLine("The node type is {0}, symbol is {1}", type_p, span_p.ToString());
-
-                    if (rootCursor == cursor) {
-                        Console.Error.WriteLine("done!");
-                        return;
-                    }
-                } while (!cursor.goto_next_sibling());
+            // "Visit" the current node in post-order
+            var node = cursor.current_node();
+            int so = (int)node.start_offset();
+            int eo = (int)node.end_offset();
+            var text = fileText.AsSpan(so, eo - so);
+            var type = cursor.current_symbol();
+            if (type == "function_definition") {
+                Console.WriteLine($"Node type is {cursor.current_symbol()}, text is {text}");
             }
         }
         
@@ -66,7 +49,7 @@ namespace TreeSitterTest
 
             using var cursor = new TSCursor(tree.root_node(), lang);
 
-            PostOrderTraverse(path, filetext, cursor);
+            PostOrderCursorRecursive(cursor, filetext);
             return true;
         }
         
@@ -174,5 +157,3 @@ namespace TreeSitterTest
         }
     }
 }
-
-
